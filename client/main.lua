@@ -53,6 +53,16 @@ local function confirmEdit(handle, id, name, netId)
                 end,
             },
             {
+                title = 'TP To Entity',
+                icon = 'arrows-to-circle',
+                onSelect = function()
+                    SetEntityDrawOutline(handle, false)
+                    local coords = GetEntityCoords(handle)
+                    SetEntityCoords(cache.ped, coords.x, coords.y, coords.z)
+                    lib.showContext('object_menu_s')
+                end,
+            },
+            {
                 title = 'Cancel',
                 icon = 'times',
                 onSelect = function()
