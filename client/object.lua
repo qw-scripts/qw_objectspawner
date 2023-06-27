@@ -16,7 +16,11 @@ end
 function obj.removeObject(id, netId)
     local deleted = lib.callback.await('objects:deleteObject', 100, id, netId)
     if deleted then
-        QBCore.Functions.Notify('Object deleted', 'success')
+        lib.notify({
+            title = 'Object Spawner',
+            description = 'Object Deleted',
+            type = 'error'
+        })
     end
 end
 

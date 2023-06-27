@@ -19,7 +19,12 @@ local function newObject()
     local objectModel = object and GetHashKey(object)
 
     if not IsModelInCdimage(objectModel) then
-        return QBCore.Functions.Notify(("The object \"%s\" is not in cd image, are you sure this exists?"):format(objectModel), 'error')
+        lib.notify({
+            title = 'Object Spawner',
+            description = ("The object \"%s\" is not in cd image, are you sure this exists?"):format(objectModel),
+            type = 'error'
+        })
+        return
     end
 
     obj.previewObject(objectModel, object)
@@ -66,7 +71,12 @@ local function editObjects()
     local placed = obj.getPlaced()
 
     if #placed == 0 then
-        return QBCore.Functions.Notify('No objects placed', 'error')
+        lib.notify({
+            title = 'Object Spawner',
+            description = 'No objects placed',
+            type = 'error'
+        })
+        return
     end
 
     for i = 1, #placed do
