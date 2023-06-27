@@ -102,7 +102,7 @@ local function editObjects()
 
     lib.registerContext({
         id = 'object_menu_s',
-        title = 'Placed Objects',
+        title = ('Placed Objects (%s Total)'):format(#placed),
         menu = 'object_menu_main',
         options = options,
     })
@@ -110,8 +110,21 @@ local function editObjects()
     lib.showContext('object_menu_s')
 end
 
+local function removeAllObjects() 
+    local deleted = lib.callback.await('objects:deleteAllObjects', 100)
+
+    if deleted then
+        lib.notify({
+            title = 'Object Spawner',
+            description = 'All objects removed',
+            type = 'success'
+        })
+    end
+end
+
 RegisterNetEvent("qw_decorator:client:open", function() 
     if GetInvokingResource() then return end -- only allow this to be called from the server
+    local placed = obj.getPlaced()
     lib.registerContext({
         id = 'object_menu_main',
         title = 'Synced Objects',
@@ -130,6 +143,15 @@ RegisterNetEvent("qw_decorator:client:open", function()
                 icon = 'object-ungroup',
                 onSelect = function()
                     editObjects()
+                end,
+            },
+            {
+                title = 'Delete Existing Objects',
+                description = 'delete objects that have been placed',
+                icon = 'object-ungroup',
+                disabled = #placed == 0,
+                onSelect = function()
+                    removeAllObjects()
                 end,
             }
         },

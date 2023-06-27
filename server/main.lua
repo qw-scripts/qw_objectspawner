@@ -48,17 +48,20 @@ lib.callback.register('objects:updateObject', function(source, data)
     return false
 end)
 
+lib.callback.register('objects:deleteAllObjects', function(source)
+    local deletedObjects = db.removeAllSyncedObjects()
+
+    if deletedObjects then
+        objects.despawnAllObjects()
+        return true
+    end
+
+    return false
+end)
+
 AddEventHandler('onResourceStop', function(resource)
    if resource == GetCurrentResourceName() then
-        local spawnedInObjects = objects.getObjects()
-
-        if #spawnedInObjects == 0 then return end
-
-        for i = 1, #spawnedInObjects do
-            local netId = spawnedInObjects[i]
-            local obj = NetworkGetEntityFromNetworkId(netId)
-            DeleteEntity(obj)
-        end
+        objects.despawnAllObjects()
    end
 end)
 

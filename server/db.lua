@@ -48,4 +48,11 @@ function db.updateSyncedObject(model, x, y, z, rx, ry, rz, heading, id)
     return MySQL.prepare.await(UPDATE_SYNCED_OBJECT, { model, x, y, z, rx, ry, rz, heading, id })
 end
 
+local REMOVE_ALL_SYNCED_OBJECTS = 'DELETE FROM `synced_objects`'
+---Remove all synced objects
+---@return table
+function db.removeAllSyncedObjects()
+    return MySQL.query.await(REMOVE_ALL_SYNCED_OBJECTS)
+end
+
 return db

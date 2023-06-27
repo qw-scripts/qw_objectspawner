@@ -44,6 +44,15 @@ function objects.updateObjectState(netId, coords, rotation)
     }
 end
 
+function objects.despawnAllObjects()
+    for i = 1, #spawnedInObjects do
+        local obj = NetworkGetEntityFromNetworkId(spawnedInObjects[i])
+        DeleteEntity(obj)
+    end
+
+    spawnedInObjects = {}
+end
+
 function objects.getObjects()
     return spawnedInObjects
 end
