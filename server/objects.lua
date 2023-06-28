@@ -1,60 +1,84 @@
+local db = require 'server.db'
+
 local objects = {}
-local spawnedInObjects = {}
+ServerObjects = {}
 
-function objects.spawnNewObject(coords, rotation, object, dbId)
-    local obj = CreateObjectNoOffset(object, coords.x, coords.y, coords.z, true, false, false)
+function objects.spawnNewObject(data)
+    local insertId = db.insertNewSyncedObject(data.model, data.x, data.y, data.z, data.rx, data.ry, data.rz, data.heading, data.sceneid)
 
-    Entity(obj).state.object = {
-        model = object,
+    local coords = vector3(tonumber(data.x), tonumber(data.y), tonumber(data.z))
+    local rotation = vector3(tonumber(data.rx), tonumber(data.ry), tonumber(data.rz))
+
+    if insertId == 0 then return end
+
+    ServerObjects[insertId] = {
         coords = coords,
         rotation = rotation,
-        dbId = dbId,
+        model = data.model,
+        sceneid = data.sceneid,
+        id = insertId,
     }
 
-    local netId = NetworkGetNetworkIdFromEntity(obj)
-
-    spawnedInObjects[#spawnedInObjects+1] = netId
+    TriggerClientEvent('objects:client:addObject', -1, ServerObjects[insertId])
 end
 
-function objects.despawnByNetId(netId)
-    for i = 1, #spawnedInObjects do
-        if spawnedInObjects[i] == netId then
-            local obj = NetworkGetEntityFromNetworkId(spawnedInObjects[i])
-            DeleteEntity(obj)
-            table.remove(spawnedInObjects, i)
-            break
+--- removes an object from the database and the world
+---@param insertId number
+function objects.removeObject(insertId)
+    local deletedObjectId = db.deleteSyncedObject(insertId)
+    
+    if deletedObjectId == 0 then return end
+
+    ServerObjects[deletedObjectId] = nil
+    TriggerClientEvent('objects:client:removeObject', -1, insertId)
+end
+
+--- update an object in the database and the world
+---@param data table
+function objects.updateObject(data)
+    local insertId = data.insertId
+    local model = data.model
+    local x, y, z = data.x, data.y, data.z
+    local rx, ry, rz = data.rx, data.ry, data.rz
+    local updatedObject = db.updateSyncedObject(model, x, y, z, rx, ry, rz, insertId)
+    
+    if updatedObject == 0 then return end
+    
+    local coords = vec3(tonumber(x), tonumber(y), tonumber(z))
+    local rotation = vec3(tonumber(rx), tonumber(ry), tonumber(rz))
+    
+    local spawnedObject = ServerObjects[insertId]
+    spawnedObject.coords = coords
+    spawnedObject.rotation = rotation
+    TriggerClientEvent('objects:client:updateObject', -1, { coords = coords, rotation = rotation, insertId = insertId })
+end
+
+
+AddEventHandler('onResourceStart', function(resource)
+    if resource == GetCurrentResourceName() then
+        Wait(1000)
+        local savedObjects = db.selectAllSyncedObjects()
+
+        if #savedObjects == 0 then return end
+
+        for _, v in pairs(savedObjects) do
+            local coords = vector3(tonumber(v.x), tonumber(v.y), tonumber(v.z))
+            local rotation = vector3(tonumber(v.rx), tonumber(v.ry), tonumber(v.rz))
+            local model = v.model
+            local insertId = v.id
+
+            ServerObjects[insertId] = {
+                coords = coords,
+                rotation = rotation,
+                model = model,
+                sceneid = v.sceneid,
+                id = insertId,
+            }
         end
+        
+
+        TriggerClientEvent('objects:client:loadObjects', -1, ServerObjects)
     end
-end
-
-function objects.updateObjectState(netId, coords, rotation)
-    local obj = NetworkGetEntityFromNetworkId(netId)
-    local objectState = Entity(obj).state?.object
-
-    if not objectState then return end
-
-    local model = objectState.model
-    local dbId = objectState.dbId
-
-    Entity(obj).state.object = {
-        model = model,
-        coords = coords,
-        rotation = rotation,
-        dbId = dbId,
-    }
-end
-
-function objects.despawnAllObjects()
-    for i = 1, #spawnedInObjects do
-        local obj = NetworkGetEntityFromNetworkId(spawnedInObjects[i])
-        DeleteEntity(obj)
-    end
-
-    spawnedInObjects = {}
-end
-
-function objects.getObjects()
-    return spawnedInObjects
-end
+end)
 
 return objects

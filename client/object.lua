@@ -1,42 +1,31 @@
 local obj = {}
 
+ClientObjects = {}
+
 local inObjectPreview = false
 local handle = nil
 
----get all placed objects
----@return table
-function obj.getPlaced()
-    local placed = lib.callback.await('objects:getAllObjects', 100)
-    return placed
-end
-
 ---removed an object from the database and the world
----@param id number
----@param netId number
-function obj.removeObject(id, netId)
-    local deleted = lib.callback.await('objects:deleteObject', 100, id, netId)
-    if deleted then
-        lib.notify({
-            title = 'Object Spawner',
-            description = 'Object Deleted',
-            type = 'error'
-        })
-    end
+---@param insertId number
+function obj.removeObject(insertId)
+    TriggerServerEvent('objects:server:removeObject', insertId)
 end
 
 ---edit an object in the database and the world
----@param id number
----@param netId number
-function obj.editPlaced(id, netId)
-    local entity = NetworkGetEntityFromNetworkId(netId)
-    local name = Entity(entity).state?.object.model or 'Unknown'
+---@param insertId number
+function obj.editPlaced(insertId)
+    local object = ClientObjects[insertId]
+    local handle = object.handle
+    local name = object.model
 
-    local data = exports.object_gizmo:useGizmo(entity)
+    if not DoesEntityExist(handle) then return end
+
+    local data = exports.object_gizmo:useGizmo(handle)
 
     if data then
         local coords = data.position
         local rotation = data.rotation
-        lib.callback.await('objects:updateObject', 100, {
+        TriggerServerEvent('objects:server:updateObject', {
             model = name,
             x = ('%.3f'):format(coords.x),
             y = ('%.3f'):format(coords.y),
@@ -44,22 +33,20 @@ function obj.editPlaced(id, netId)
             rx = ('%.3f'):format(rotation.x),
             ry = ('%.3f'):format(rotation.y),
             rz = ('%.3f'):format(rotation.z),
-            heading = GetEntityHeading(entity),
-            id = id,
-            netId = netId
-        })
+            insertId = insertId
+        } )
     end
 end
 
 ---spawn an object in the world
----@param model number
----@param modelName string
-function obj.previewObject(model, modelName)
+---@param model string
+---@param sceneId number
+function obj.previewObject(model, sceneId)
     inObjectPreview = true
 
-    lib.requestModel(model, 1000)
+    lib.requestModel(joaat(model), 1000)
 
-    handle = CreateObject(model, GetEntityCoords(cache.ped), false, false, false)
+    handle = CreateObject(model, GetEntityCoords(cache.ped), false, true, true)
 
     SetEntityAlpha(handle, 200, false)
     SetEntityCollision(handle, false, false)
@@ -80,12 +67,12 @@ function obj.previewObject(model, modelName)
 
                 -- Left
                 if IsControlPressed(0, 174) then
-                    SetEntityHeading(handle, GetEntityHeading(handle) - 1.0)
+                    SetEntityHeading(handle, GetEntityHeading(handle) - 0.3)
                 end
 
                 -- Right
                 if IsControlPressed(0, 175) then
-                    SetEntityHeading(handle, GetEntityHeading(handle) + 1.0)
+                    SetEntityHeading(handle, GetEntityHeading(handle) + 0.3)
                 end
 
                 -- G
@@ -103,27 +90,129 @@ function obj.previewObject(model, modelName)
                 -- E
                 if IsControlJustPressed(0, 38) then
                     local rotation = GetEntityRotation(handle, 2)
-                    local wasPlaced = lib.callback.await('objects:newObject', 100, {
-                        model = modelName,
+                    local heading = GetEntityHeading(handle)
+                    TriggerServerEvent('objects:server:newObject', {
+                        model = model,
                         x = ('%.3f'):format(coords.x),
                         y = ('%.3f'):format(coords.y),
                         z = ('%.3f'):format(coords.z),
                         rx = ('%.3f'):format(rotation.x),
                         ry = ('%.3f'):format(rotation.y),
                         rz = ('%.3f'):format(rotation.z),
-                        heading = GetEntityHeading(handle),
+                        heading = heading,
+                        sceneid = sceneId
                     })
 
-                    if wasPlaced then
-                        lib.hideTextUI()
-                        DeleteEntity(handle)
-                        inObjectPreview = false
-                        handle = nil
-                    end
+                    lib.hideTextUI()
+                    SetEntityAsMissionEntity(handle, false, true)
+                    DeleteObject(handle)
+                    inObjectPreview = false
+                    handle = nil
                 end
             end
         end
     end)
 end
+
+RegisterNetEvent("objects:client:addObject", function(object)
+    ClientObjects[object.id] = object
+end)
+
+RegisterNetEvent("objects:client:removeObject", function(insertId)
+    local object = ClientObjects[insertId]
+
+    if not object then return end
+
+    if DoesEntityExist(object.handle) then
+        SetEntityAsMissionEntity(object.handle, false, true)
+        DeleteObject(object.handle)
+    end
+
+    ClientObjects[insertId] = nil
+end)
+
+RegisterNetEvent("objects:client:updateObject", function(data)
+    local coords = data.coords
+    local rotation = data.rotation
+    local object = ClientObjects[data.insertId]
+
+    if not object then return end
+
+    if not DoesEntityExist(object.handle) then
+        object.coords = coords
+        object.rotation = rotation
+        return
+    end
+
+    SetEntityCoords(object.handle, coords.x, coords.y, coords.z)
+    SetEntityRotation(object.handle, rotation.x, rotation.y, rotation.z, 2, true)
+end)
+
+RegisterNetEvent("objects:client:loadObjects", function(objects)
+    ClientObjects = objects
+end)
+
+
+local function SpawnObject(payload)
+    lib.requestModel(joaat(payload.model))
+    local obj = CreateObject(payload.model, payload.coords.x, payload.coords.y, payload.coords.z, false, true, true)
+    SetEntityRotation(obj, payload.rotation.x, payload.rotation.y, payload.rotation.z, 2, true)
+    FreezeEntityPosition(obj, true)
+    SetModelAsNoLongerNeeded(payload.model)
+    return obj
+end
+
+local function forceDeleteEntity(insertId)
+    local object = ClientObjects[insertId]
+
+    if not object then return end
+
+    SetEntityAsMissionEntity(object.handle, false, true)
+    DeleteObject(object.handle)
+    object.handle = false
+end
+
+CreateThread(function()
+    while true do
+        local pCoords = GetEntityCoords(cache.ped)
+
+        for k, v in pairs(ClientObjects) do
+            local isClose = #(pCoords - v.coords) < 50.0
+
+            if not isClose and v.handle then
+                forceDeleteEntity(k)
+                Wait(0)
+            elseif isClose and (not v.handle or not DoesEntityExist(v.handle)) then
+                v.handle = SpawnObject(v)
+                Wait(0)
+            end
+        end
+        Wait(1200)
+    end
+end)
+
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
+    local allObjects = lib.callback.await('objects:getAllObjects', 100)
+    ClientObjects = allObjects
+end)
+
+RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
+    for k, v in pairs(ClientObjects) do
+        if v.handle then
+            forceDeleteEntity(k)
+        end
+    end
+    ClientObjects = {}
+end)
+
+AddEventHandler('onResourceStop', function(resource)
+    if resource == GetCurrentResourceName() then
+        for k, v in pairs(ClientObjects) do
+            if v.handle then
+                forceDeleteEntity(k)
+            end
+        end
+    end
+end)
 
 return obj
