@@ -144,8 +144,9 @@ RegisterNetEvent("objects:client:updateObject", function(data)
         return
     end
 
-    SetEntityCoords(object.handle, coords.x, coords.y, coords.z)
+    SetEntityCoords(object.handle, coords.x, coords.y, coords.z, false)
     SetEntityRotation(object.handle, rotation.x, rotation.y, rotation.z, 2, true)
+    FreezeEntityPosition(object.handle, true)
 end)
 
 RegisterNetEvent("objects:client:loadObjects", function(objects)
@@ -155,7 +156,7 @@ end)
 
 local function SpawnObject(payload)
     lib.requestModel(joaat(payload.model))
-    local obj = CreateObject(payload.model, payload.coords.x, payload.coords.y, payload.coords.z, false, true, true)
+    local obj = CreateObjectNoOffset(payload.model, payload.coords.x, payload.coords.y  , payload.coords.z, false, true, true)
     SetEntityRotation(obj, payload.rotation.x, payload.rotation.y, payload.rotation.z, 2, true)
     FreezeEntityPosition(obj, true)
     SetModelAsNoLongerNeeded(payload.model)
@@ -177,7 +178,7 @@ CreateThread(function()
         local pCoords = GetEntityCoords(cache.ped)
 
         for k, v in pairs(ClientObjects) do
-            local isClose = #(pCoords - v.coords) < 50.0
+            local isClose = #(pCoords - v.coords) < 100.0
 
             if not isClose and v.handle then
                 forceDeleteEntity(k)
@@ -192,8 +193,9 @@ CreateThread(function()
 end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
-    local allObjects = lib.callback.await('objects:getAllObjects', 100)
-    ClientObjects = allObjects
+    lib.callback('objects:getAllObjects', 1000, function(allObjects) 
+        ClientObjects = allObjects
+    end)
 end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
