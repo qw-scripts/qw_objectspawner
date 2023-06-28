@@ -4,7 +4,7 @@ game 'gta5'
 
 description 'object spawner for fivem'
 author 'qw-scripts'
-version '0.1.0'
+version '0.2.0'
 
 client_scripts {
     'client/**/*'
