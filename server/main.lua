@@ -14,7 +14,7 @@ RegisterNetEvent("objects:server:removeObject", function(insertId)
 end)
 
 lib.callback.register('objects:getAllObjects', function(source)
-	local ServerObjects = db.selectAllScenesWithCountOfSceneObjects()
+    local allScenes = db.selectAllSyncedObjects()
     return ServerObjects
 end)
 
